@@ -68,7 +68,9 @@ func break1Xor(a []byte) (byte, []byte) {
 			maxScore = score
 			maxKey = byte(k)
 			maxDecoded = decoded
-			fmt.Println(k, score, string(decoded))
+			if score > 0.5 {
+				//fmt.Println(k, score, string(decoded))
+			}
 		}
 	}
 	return maxKey, maxDecoded
@@ -98,6 +100,29 @@ func calcHamming(a, b []byte) int {
 	return hamming
 }
 
+func checkKey(text []byte) (int, float64) {
+	likelyKey := 40
+	lowHam := 10000.00
+	numBlocks := len(text) / 40
+	for key := 1; key < 40; key++ {
+		ham := 0.0
+		for i := 0; i < numBlocks; i++ {
+			a := i * key
+			b := (i + 1) * key
+			c := (i + 2) * key
+			ham += float64(calcHamming(text[a:b], text[b:c])) / float64(key)
+		}
+		ham /= float64(numBlocks)
+		if ham < lowHam {
+			lowHam = ham
+			likelyKey = key
+			fmt.Printf("Bits: %v Size: %v\n", lowHam, likelyKey)
+		}
+	}
+	fmt.Printf("Bits: %v Size: %v\n", lowHam, likelyKey)
+	return likelyKey, lowHam
+}
+
 func ReadFile(filename string) []byte {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -113,26 +138,6 @@ func ReadFile(filename string) []byte {
 	return bytes
 }
 
-func scoreText(a []byte) float64 {
-	cts := make([]int, 26)
-	for _, ch := range a {
-		if 'A' <= ch && ch <= 'Z' {
-			ch -= 32
-		}
-		if 'a' <= ch && ch <= 'z' {
-			cts[int(ch)-'a']++
-		}
-	}
-	amount := float64(len(a))
-	score := 0.0
-	freqs := make([]float64, 26)
-	for i, c := range cts {
-		freqs[i] = float64(c) / amount
-		score += freqs[i]
-	}
-	return cosine(freqs, idealFreqs)
-}
-
 func main() {
 	encoded := ReadFile("106.txt")
 	bytes, _ := base64.StdEncoding.DecodeString(string(encoded))
@@ -141,5 +146,8 @@ func main() {
 	b := "wokka wokka!!!"
 
 	fmt.Println("Test: ", calcHamming([]byte(a), []byte(b)))
+
+	keySize, ham := checkKey(bytes)
+	fmt.Println(keySize, ham)
 
 }
