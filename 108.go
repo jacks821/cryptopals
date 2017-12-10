@@ -6,3 +6,32 @@ Detect it.
 
 Remember that the problem with ECB is that it is stateless and deterministic;
 the same 16 byte plaintext block will always produce the same 16 byte ciphertext.*/
+package main
+
+
+import (
+	"bufio"
+	"fmt"
+  "os"
+)
+
+func main() {
+  file, _ := os.Open("108.txt")
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		t := scanner.Text()
+		size := len(t) / 32
+		for i := 0; i < size; i++ {
+			for j := i + 1; j < size; j++ {
+				a := i * 32
+				b := (i + 1) * 32
+				c := j * 32
+				d := (j + 1) * 32
+				if t[a:b] == t[c:d] {
+					fmt.Println(i, j)
+					fmt.Println(t)
+				}
+			}
+		}
+	}
+}
