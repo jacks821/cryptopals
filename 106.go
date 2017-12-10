@@ -1,13 +1,48 @@
 package main
 
 import (
-	"bufio"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"math"
-	"os"
+  "os"
+  "log"
+  "bufio"
+  "bytes"
 )
+
+/*Decrypt it.
+
+Here's how:
+
+Let KEYSIZE be the guessed length of the key; try values from 2 to (say) 40.
+Write a function to compute the edit distance/Hamming distance between two strings. The Hamming distance is just the number of differing bits. The distance between:
+this is a test
+and
+wokka wokka!!!
+is 37. Make sure your code agrees before you proceed.
+
+
+For each KEYSIZE, take the first KEYSIZE worth of bytes, and the second KEYSIZE worth of bytes,
+ and find the edit distance between them. Normalize this result by dividing by KEYSIZE.
+
+The KEYSIZE with the smallest normalized edit distance is probably the key.
+You could proceed perhaps with the smallest 2-3 KEYSIZE values.
+Or take 4 KEYSIZE blocks instead of 2 and average the distances.
+
+Now that you probably know the KEYSIZE: break the ciphertext into blocks of KEYSIZE length.
+Now transpose the blocks: make a block that is the first byte of every block,
+and a block that is the second byte of every block, and so on.
+
+Solve each block as if it was single-character XOR. You already have code to do this.
+
+For each block, the single-byte XOR key that produces the best looking histogram is the repeating-key
+XOR key byte for that block. Put them together and you have the key.
+
+
+This code is going to turn out to be surprisingly useful later on. Breaking repeating-key XOR ("Vigenere")
+statistically is obviously an academic exercise,
+a "Crypto 101" thing. But more people "know how" to break it than can actually break it,
+and a similar technique breaks something much more important.*/
 
 var idealFreqs = []float64{
 	.0817, .0149, .0278, .0425, .1270, .0223, .0202, .0609, .0697, .0015, .0077, .0402, .0241,
@@ -24,7 +59,7 @@ func xorByte(a []byte, k byte) []byte {
 func dotVec(a, b []float64) float64 {
 	sum := 0.0
 	for i := range a {
-		sum += a[i] * a[i]
+		sum += a[i] * b[i]
 	}
 	return sum
 }
@@ -37,6 +72,7 @@ func cosine(a, b []float64) float64 {
 	return dotVec(a, b) / (lenVec(a) * lenVec(b))
 }
 
+// scoreText returns integer representing how likely seq a to be a regular english text
 func scoreText(a []byte) float64 {
 	cts := make([]int, 26)
 	for _, ch := range a {
@@ -48,15 +84,15 @@ func scoreText(a []byte) float64 {
 		}
 	}
 	amount := float64(len(a))
-	score := 0.0
 	freqs := make([]float64, 26)
 	for i, c := range cts {
 		freqs[i] = float64(c) / amount
-		score += freqs[i]
 	}
+	// fmt.Println(freqs)
 	return cosine(freqs, idealFreqs)
 }
 
+// return most likely key for the sequence of bytes XORed with 1 byte
 func break1Xor(a []byte) (byte, []byte) {
 	var maxScore float64
 	var maxKey byte
@@ -123,6 +159,7 @@ func checkKey(text []byte) (int, float64) {
 	return likelyKey, lowHam
 }
 
+
 func ReadFile(filename string) []byte {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -138,16 +175,40 @@ func ReadFile(filename string) []byte {
 	return bytes
 }
 
+func findKey(data []byte, keySize int) ([]byte) {
+	var buffer bytes.Buffer
+	blocks := make([][]byte, keySize)
+	for x := 0; x < keySize; x++ {
+			blocks[x] = make([]byte, (len(data)/keySize) + 1)
+	}
+	for i, b := range data {
+		fmt.Println(i%keySize, i/keySize)
+		blocks[i%keySize][i/keySize] = b
+	}
+	for _, block := range blocks {
+		key, _ := break1Xor(block)
+		buffer.WriteString(string(key))
+	}
+	return buffer.Bytes()
+}
+
+func decipherText(data []byte, key []byte) []byte {
+  var buffer bytes.Buffer
+  for x := range data {
+    buffer.WriteByte(data[x] ^ key[x%len(key)])
+  }
+  return buffer.Bytes()
+}
+
 func main() {
 	encoded := ReadFile("106.txt")
 	bytes, _ := base64.StdEncoding.DecodeString(string(encoded))
 
-	a := "this is a test"
-	b := "wokka wokka!!!"
-
-	fmt.Println("Test: ", calcHamming([]byte(a), []byte(b)))
-
-	keySize, ham := checkKey(bytes)
-	fmt.Println(keySize, ham)
-
+	fmt.Println("bytes:", len(bytes))
+	fmt.Println("test: ", calcHamming([]byte("this is a test"), []byte("wokka wokka!!!")))
+	size, _ := checkKey(bytes)
+	key := findKey(bytes, size)
+	fmt.Printf("key:\n%s\n", string(key))
+	decoded := decipherText(bytes, key)
+	fmt.Printf("decoded:\n%s\n", string(decoded))
 }
